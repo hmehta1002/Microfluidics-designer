@@ -1,5 +1,5 @@
 # =====================================================
-# AI MICROFLUIDIC OPTIMIZER (FULL + MATERIAL AI)
+# AI MICROFLUIDIC OPTIMIZER (WITH ADVISOR + MATERIAL AI)
 # =====================================================
 
 import streamlit as st
@@ -20,8 +20,8 @@ st.set_page_config(
 st.title("🧬 AI Microfluidic Optimization Platform")
 
 st.markdown("""
-End-to-end platform for microfluidic protein purification:
-Physics + AI + Optimization + Material Recommendation
+Decision-support system for protein purification:
+Simulation + AI + Optimization + Recommendations
 """)
 
 
@@ -47,7 +47,7 @@ st.sidebar.header("⚙️ Controls")
 protein = st.sidebar.text_input("Target Protein", "Albumin")
 
 material = st.sidebar.selectbox(
-    "Selected Material (Test)",
+    "Selected Material",
     ["PDMS", "PMMA", "Hydrogel", "Resin"]
 )
 
@@ -77,12 +77,9 @@ temperature = st.sidebar.slider(
 )
 
 run_sim = st.sidebar.button("▶ Run Simulation")
-
 run_ga = st.sidebar.button("🧬 Run Optimization")
-
 train_ai = st.sidebar.button("🧠 Train AI Model")
-
-run_cfd = st.sidebar.button("🌀 Run 2 Virtual CFD Tests")
+run_cfd = st.sidebar.button("🌀 Run Virtual CFD Tests")
 
 
 # -----------------------------------------------------
@@ -228,7 +225,7 @@ def compute_msq(material,temp,flow):
 
 
 # -----------------------------------------------------
-# MATERIAL RECOMMENDATION ENGINE
+# MATERIAL RECOMMENDER
 # -----------------------------------------------------
 
 def find_best_material(temp, flow):
@@ -238,9 +235,7 @@ def find_best_material(temp, flow):
     scores = {}
 
     for mat in materials:
-
-        msq = compute_msq(mat, temp, flow)
-        scores[mat] = msq
+        scores[mat] = compute_msq(mat, temp, flow)
 
     ranked = sorted(
         scores.items(),
@@ -248,10 +243,45 @@ def find_best_material(temp, flow):
         reverse=True
     )
 
-    best_mat = ranked[0][0]
-    best_score = ranked[0][1]
+    return ranked, ranked[0][0], ranked[0][1]
 
-    return ranked, best_mat, best_score
+
+# -----------------------------------------------------
+# DESIGN ADVISOR
+# -----------------------------------------------------
+
+def design_advisor(dqi, psq, msq, Re, tau, material, flow):
+
+    tips = []
+
+    if dqi < 0.7:
+        if Re > 200:
+            tips.append("Reduce flow rate to maintain laminar flow.")
+        if tau > 2:
+            tips.append("High shear stress: increase channel height.")
+    else:
+        tips.append("Flow dynamics are optimal.")
+
+    if psq < 0.7:
+        tips.append("Improve separation: increase length or reduce flow.")
+    else:
+        tips.append("Protein separation is efficient.")
+
+    if msq < 0.7:
+        tips.append("Material performance is low. Consider switching material.")
+    else:
+        tips.append("Selected material is suitable.")
+
+    if material == "PDMS" and msq < 0.7:
+        tips.append("PDMS causes adsorption. Hydrogel recommended.")
+
+    if flow > 25:
+        tips.append("Flow too high: may reduce binding efficiency.")
+
+    if flow < 3:
+        tips.append("Flow very low: throughput will be poor.")
+
+    return tips
 
 
 # -----------------------------------------------------
@@ -260,14 +290,12 @@ def find_best_material(temp, flow):
 
 def ai_fitness(dqi,psq,msq):
 
-    score = (
+    return (
         W["dqi"]*dqi +
         W["psq"]*psq +
         W["msq"]*msq +
         BIAS
     )
-
-    return score
 
 
 # -----------------------------------------------------
@@ -316,9 +344,7 @@ def train_model(data,lr=0.05,epochs=200):
 
         for dqi,psq,msq,y in data:
 
-            y_pred = ai_fitness(dqi,psq,msq)
-
-            err = y_pred-y
+            err = ai_fitness(dqi,psq,msq)-y
 
             dw["dqi"]+=err*dqi
             dw["psq"]+=err*psq
@@ -355,7 +381,7 @@ def run_ga(pop=20,gens=10):
     best_score=0
 
 
-    for g in range(gens):
+    for _ in range(gens):
 
         scored=[]
 
@@ -448,8 +474,11 @@ if run_sim:
     fit = ai_fitness(dqi,psq,msq)
 
     ranked,best_mat,best_score = find_best_material(
-        temperature,
-        flow_rate
+        temperature,flow_rate
+    )
+
+    advice = design_advisor(
+        dqi,psq,msq,Re,tau,material,flow_rate
     )
 
     c1,c2,c3,c4 = st.columns(4)
@@ -466,7 +495,14 @@ if run_sim:
     )
 
 
-    # Material Recommendation
+    # DESIGN REPORT
+    st.subheader("🧠 Design Intelligence Report")
+
+    for tip in advice:
+        st.write("✔️",tip)
+
+
+    # MATERIAL RECOMMENDATION
     st.subheader("🏗️ Material Recommendation")
 
     colA,colB = st.columns(2)
