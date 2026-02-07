@@ -1,5 +1,5 @@
 # =====================================================
-# AI MICROFLUIDIC OPTIMIZER (WITH ADVISOR + MATERIAL AI)
+# AI MICROFLUIDIC OPTIMIZER (CLEAN FINAL VERSION)
 # =====================================================
 
 import streamlit as st
@@ -9,7 +9,7 @@ import math
 
 
 # -----------------------------------------------------
-# PAGE CONFIG
+# PAGE SETUP
 # -----------------------------------------------------
 
 st.set_page_config(
@@ -20,29 +20,26 @@ st.set_page_config(
 st.title("🧬 AI Microfluidic Optimization Platform")
 
 st.markdown("""
-Decision-support system for protein purification:
-Simulation + AI + Optimization + Recommendations
+Smart decision-support system for protein purification
+using microfluidic devices.
 """)
 
 
 # -----------------------------------------------------
-# TRAINABLE AI PARAMETERS
+# AI WEIGHTS
 # -----------------------------------------------------
 
-W = {
-    "dqi": 0.4,
-    "psq": 0.35,
-    "msq": 0.25
-}
-
+W_DQI = 0.4
+W_PSQ = 0.35
+W_MSQ = 0.25
 BIAS = 0.1
 
 
 # -----------------------------------------------------
-# SIDEBAR CONTROLS
+# SIDEBAR
 # -----------------------------------------------------
 
-st.sidebar.header("⚙️ Controls")
+st.sidebar.header("⚙️ Design Controls")
 
 protein = st.sidebar.text_input("Target Protein", "Albumin")
 
@@ -51,7 +48,7 @@ material = st.sidebar.selectbox(
     ["PDMS", "PMMA", "Hydrogel", "Resin"]
 )
 
-flow_rate = st.sidebar.slider(
+flow = st.sidebar.slider(
     "Flow Rate (µL/min)",
     1.0, 50.0, 10.0
 )
@@ -71,22 +68,19 @@ length = st.sidebar.slider(
     500, 3000, 1200
 )
 
-temperature = st.sidebar.slider(
+temp = st.sidebar.slider(
     "Temperature (°C)",
     20, 60, 37
 )
 
-run_sim = st.sidebar.button("▶ Run Simulation")
-run_ga = st.sidebar.button("🧬 Run Optimization")
-train_ai = st.sidebar.button("🧠 Train AI Model")
-run_cfd = st.sidebar.button("🌀 Run Virtual CFD Tests")
+run = st.sidebar.button("▶ Run Analysis")
 
 
 # -----------------------------------------------------
-# CORE PHYSICS MODEL (DQI)
+# DQI MODEL
 # -----------------------------------------------------
 
-def run_simulation(flow, w, h, l, temp, material):
+def compute_dqi(flow, w, h, temp, material):
 
     w *= 1e-6
     h *= 1e-6
@@ -129,47 +123,10 @@ def run_simulation(flow, w, h, l, temp, material):
 
 
 # -----------------------------------------------------
-# VIRTUAL CFD ENGINE
-# -----------------------------------------------------
-
-def virtual_cfd(flow, w, h, l):
-
-    w *= 1e-6
-    h *= 1e-6
-    l *= 1e-6
-
-    Q = flow * 1e-9 / 60
-
-    rho = 1000
-    mu = 0.001
-
-    A = w*h
-    v = Q/A
-
-    Dh = 2*w*h/(w+h)
-
-    Re = (rho*v*Dh)/mu
-
-    dp = (32*mu*v*l)/(Dh**2)
-
-    tau = (4*mu*v)/Dh
-
-    mixing = min(1,(Re/200)*(l/0.002))
-
-    return {
-        "Velocity (m/s)":round(v,5),
-        "Reynolds":round(Re,2),
-        "Pressure Drop (Pa)":round(dp,2),
-        "Shear (Pa)":round(tau,4),
-        "Mixing Efficiency":round(mixing,3)
-    }
-
-
-# -----------------------------------------------------
 # PSQ MODEL
 # -----------------------------------------------------
 
-def compute_psq(dqi, flow, material, w, h):
+def compute_psq(dqi, flow, material, w, h, l):
 
     porosity = (w*h)/(500*500)
 
@@ -182,11 +139,14 @@ def compute_psq(dqi, flow, material, w, h):
 
     flow_factor = max(0.5,1-flow/80)
 
+    length_factor = min(1,l/2000)
+
     psq = (
-        0.45*dqi +
+        0.4*dqi +
         0.25*affinity +
         0.2*porosity +
-        0.1*flow_factor
+        0.1*flow_factor +
+        0.05*length_factor
     )
 
     return round(psq,3)
@@ -225,370 +185,154 @@ def compute_msq(material,temp,flow):
 
 
 # -----------------------------------------------------
-# MATERIAL RECOMMENDER
+# MATERIAL RANKING
 # -----------------------------------------------------
 
-def find_best_material(temp, flow):
+def rank_materials(temp, flow):
 
-    materials = ["PDMS", "PMMA", "Hydrogel", "Resin"]
+    mats = ["PDMS","PMMA","Hydrogel","Resin"]
 
-    scores = {}
+    scores = []
 
-    for mat in materials:
-        scores[mat] = compute_msq(mat, temp, flow)
+    for m in mats:
+        scores.append((m,compute_msq(m,temp,flow)))
 
-    ranked = sorted(
-        scores.items(),
-        key=lambda x: x[1],
-        reverse=True
+    scores.sort(key=lambda x:x[1],reverse=True)
+
+    return scores
+
+
+# -----------------------------------------------------
+# AI FITNESS
+# -----------------------------------------------------
+
+def compute_fitness(dqi,psq,msq):
+
+    return round(
+        W_DQI*dqi +
+        W_PSQ*psq +
+        W_MSQ*msq +
+        BIAS,
+        3
     )
 
-    return ranked, ranked[0][0], ranked[0][1]
-
 
 # -----------------------------------------------------
-# DESIGN ADVISOR
+# ADVISOR
 # -----------------------------------------------------
 
-def design_advisor(dqi, psq, msq, Re, tau, material, flow):
+def advisor(dqi,psq,msq,Re,tau,material,flow,length):
 
-    tips = []
+    tips=[]
 
-    if dqi < 0.7:
-        if Re > 200:
-            tips.append("Reduce flow rate to maintain laminar flow.")
-        if tau > 2:
-            tips.append("High shear stress: increase channel height.")
+    # DQI
+    if dqi<0.7:
+        tips.append("Reduce flow to improve stability.")
+        if tau>2:
+            tips.append("Increase height to reduce shear.")
     else:
-        tips.append("Flow dynamics are optimal.")
+        tips.append("Flow dynamics are stable.")
 
-    if psq < 0.7:
-        tips.append("Improve separation: increase length or reduce flow.")
+    # PSQ
+    if psq<0.6:
+        tips.append("Poor separation: slow down flow.")
+        tips.append("Increase channel length.")
+        tips.append("Use Hydrogel for higher affinity.")
+
+    elif psq<0.75:
+        tips.append("Moderate separation: reduce flow slightly.")
+        tips.append("Increase length by ~15%.")
+
     else:
-        tips.append("Protein separation is efficient.")
+        tips.append("Protein separation is high.")
 
-    if msq < 0.7:
-        tips.append("Material performance is low. Consider switching material.")
+    # MSQ
+    if msq<0.7:
+        tips.append("Material compatibility is low.")
+
+        if material=="PDMS":
+            tips.append("PDMS adsorbs proteins. Switch material.")
+
     else:
-        tips.append("Selected material is suitable.")
+        tips.append("Material selection is good.")
 
-    if material == "PDMS" and msq < 0.7:
-        tips.append("PDMS causes adsorption. Hydrogel recommended.")
+    # Throughput
+    if flow>25:
+        tips.append("Flow too high: reduces PSQ.")
 
-    if flow > 25:
-        tips.append("Flow too high: may reduce binding efficiency.")
+    if flow<3:
+        tips.append("Flow too low: low productivity.")
 
-    if flow < 3:
-        tips.append("Flow very low: throughput will be poor.")
+    # Geometry
+    if length<900:
+        tips.append("Channel is short for good separation.")
 
     return tips
 
 
 # -----------------------------------------------------
-# AI FITNESS MODEL
+# MAIN
 # -----------------------------------------------------
 
-def ai_fitness(dqi,psq,msq):
+if run:
 
-    return (
-        W["dqi"]*dqi +
-        W["psq"]*psq +
-        W["msq"]*msq +
-        BIAS
-    )
+    st.subheader("📊 Performance Analysis")
 
-
-# -----------------------------------------------------
-# TRAINING SYSTEM
-# -----------------------------------------------------
-
-def generate_training_data(n=300):
-
-    data = []
-
-    for _ in range(n):
-
-        w = random.randint(60,250)
-        h = random.randint(40,180)
-        l = random.randint(600,2500)
-        flow = random.uniform(3,25)
-        temp = random.randint(25,45)
-
-        dqi,_,_,_ = run_simulation(
-            flow,w,h,l,temp,material
-        )
-
-        psq = compute_psq(dqi,flow,material,w,h)
-        msq = compute_msq(material,temp,flow)
-
-        true = (
-            0.45*dqi +
-            0.30*psq +
-            0.25*msq +
-            random.uniform(-0.05,0.05)
-        )
-
-        data.append((dqi,psq,msq,true))
-
-    return data
-
-
-def train_model(data,lr=0.05,epochs=200):
-
-    global W,BIAS
-
-    for _ in range(epochs):
-
-        dw = {"dqi":0,"psq":0,"msq":0}
-        db = 0
-
-        for dqi,psq,msq,y in data:
-
-            err = ai_fitness(dqi,psq,msq)-y
-
-            dw["dqi"]+=err*dqi
-            dw["psq"]+=err*psq
-            dw["msq"]+=err*msq
-            db+=err
-
-        n = len(data)
-
-        for k in W:
-            W[k]-=lr*dw[k]/n
-
-        BIAS-=lr*db/n
-
-
-# -----------------------------------------------------
-# GENETIC ALGORITHM
-# -----------------------------------------------------
-
-def run_ga(pop=20,gens=10):
-
-    population=[]
-
-    for _ in range(pop):
-
-        population.append({
-            "w":random.randint(60,250),
-            "h":random.randint(40,180),
-            "l":random.randint(600,2500),
-            "flow":random.uniform(3,25)
-        })
-
-    history=[]
-    best=None
-    best_score=0
-
-
-    for _ in range(gens):
-
-        scored=[]
-
-        for ind in population:
-
-            dqi,_,_,_ = run_simulation(
-                ind["flow"],
-                ind["w"],
-                ind["h"],
-                ind["l"],
-                temperature,
-                material
-            )
-
-            psq = compute_psq(
-                dqi,
-                ind["flow"],
-                material,
-                ind["w"],
-                ind["h"]
-            )
-
-            msq = compute_msq(
-                material,
-                temperature,
-                ind["flow"]
-            )
-
-            fit = ai_fitness(dqi,psq,msq)
-
-            scored.append((ind,fit))
-
-            if fit>best_score:
-                best_score=fit
-                best=ind.copy()
-                best["fitness"]=round(fit,3)
-
-        scored.sort(key=lambda x:x[1],reverse=True)
-
-        history.append(scored[0][1])
-
-        elites=scored[:pop//2]
-
-        new_pop=[]
-
-        for ind,_ in elites:
-
-            new_pop.append(ind)
-
-            child=ind.copy()
-
-            if random.random()<0.3:
-                child["w"]+=random.randint(-15,15)
-
-            if random.random()<0.3:
-                child["h"]+=random.randint(-10,10)
-
-            if random.random()<0.3:
-                child["flow"]+=random.uniform(-2,2)
-
-            new_pop.append(child)
-
-        population=new_pop[:pop]
-
-    return history,best
-
-
-# -----------------------------------------------------
-# SINGLE SIMULATION
-# -----------------------------------------------------
-
-if run_sim:
-
-    st.subheader("📊 Simulation Results")
-
-    dqi,Re,tau,v = run_simulation(
-        flow_rate,width,height,
-        length,temperature,material
+    dqi,Re,tau,v = compute_dqi(
+        flow,width,height,temp,material
     )
 
     psq = compute_psq(
-        dqi,flow_rate,
-        material,width,height
+        dqi,flow,material,width,height,length
     )
 
     msq = compute_msq(
-        material,temperature,flow_rate
+        material,temp,flow
     )
 
-    fit = ai_fitness(dqi,psq,msq)
+    fitness = compute_fitness(dqi,psq,msq)
 
-    ranked,best_mat,best_score = find_best_material(
-        temperature,flow_rate
+    materials = rank_materials(temp,flow)
+
+    tips = advisor(
+        dqi,psq,msq,Re,tau,
+        material,flow,length
     )
 
-    advice = design_advisor(
-        dqi,psq,msq,Re,tau,material,flow_rate
-    )
 
+    # Scores
     c1,c2,c3,c4 = st.columns(4)
 
     c1.metric("DQI",dqi)
     c2.metric("PSQ",psq)
     c3.metric("MSQ",msq)
-    c4.metric("AI Fitness",round(fit,3))
+    c4.metric("Fitness",fitness)
 
 
     st.info(
-        f"Re={Re:.1f} | Shear={tau:.4f} Pa | "
-        f"Velocity={v:.5f} m/s"
+        f"Re = {Re:.1f} | "
+        f"Shear = {tau:.3f} Pa | "
+        f"Velocity = {v:.5f} m/s"
     )
 
 
-    # DESIGN REPORT
-    st.subheader("🧠 Design Intelligence Report")
+    # Advisor
+    st.subheader("🧠 Optimization Advice")
 
-    for tip in advice:
-        st.write("✔️",tip)
+    for t in tips:
+        st.write("✔️",t)
 
 
-    # MATERIAL RECOMMENDATION
+    # Materials
     st.subheader("🏗️ Material Recommendation")
 
-    colA,colB = st.columns(2)
+    best_mat = materials[0][0]
 
-    colA.success(f"Best Material: {best_mat}")
-    colA.metric("Best MSQ",best_score)
+    st.success(f"Recommended Material: {best_mat}")
 
-    rank_df = pd.DataFrame(
-        ranked,
+    df = pd.DataFrame(
+        materials,
         columns=["Material","MSQ"]
     )
 
-    colB.table(rank_df)
-
-
-# -----------------------------------------------------
-# TRAIN AI
-# -----------------------------------------------------
-
-if train_ai:
-
-    st.subheader("🧠 AI Training")
-
-    with st.spinner("Training..."):
-
-        data = generate_training_data(400)
-        train_model(data)
-
-    st.success("Training Complete")
-
-    st.write("Updated Weights")
-    st.json(W)
-
-    st.write("Bias:",round(BIAS,4))
-
-
-# -----------------------------------------------------
-# GENETIC OPTIMIZATION
-# -----------------------------------------------------
-
-if run_ga:
-
-    st.subheader("🧬 Genetic Optimization")
-
-    with st.spinner("Optimizing..."):
-
-        history,best = run_ga()
-
-    df = pd.DataFrame({
-        "Generation":range(1,len(history)+1),
-        "Best Fitness":history
-    })
-
-    st.line_chart(df.set_index("Generation"))
-
-    st.success("Optimization Finished")
-
-    st.subheader("🏆 Best Design")
-
-    st.json(best)
-
-
-# -----------------------------------------------------
-# VIRTUAL CFD TESTS
-# -----------------------------------------------------
-
-if run_cfd:
-
-    st.subheader("🌀 Virtual CFD Tests")
-
-    results=[]
-
-    for i in range(2):
-
-        f = flow_rate*random.uniform(0.8,1.2)
-        w = width*random.uniform(0.9,1.1)
-        h = height*random.uniform(0.9,1.1)
-        l = length*random.uniform(0.95,1.05)
-
-        res = virtual_cfd(f,w,h,l)
-
-        st.write(f"Test {i+1}")
-        st.json(res)
-
-        results.append(res)
-
-    df = pd.DataFrame(results)
-
-    st.dataframe(df)
+    st.table(df)
