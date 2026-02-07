@@ -1,12 +1,13 @@
 # ==========================================================
 # COMPLETE AI MICROFLUIDIC OPTIMIZATION PLATFORM
-# DQI + PSQ + MSQ + ANALYSIS + BATCH + GA + CFD + ADVISOR
+# Extended Version (Merged + Automated + Monitor)
 # ==========================================================
 
 import streamlit as st
 import pandas as pd
 import random
 import math
+import time
 
 
 # ==========================================================
@@ -25,22 +26,21 @@ Research-grade decision system for
 microfluidic protein purification.
 
 Includes:
-• Hydrodynamic Analysis (DQI)
-• Separation Analysis (PSQ)
-• Material Analysis (MSQ)
+• DQI / PSQ / MSQ Analysis
 • Batch Experiments
 • Genetic Optimization
 • Virtual CFD
-• Design Advisor
+• Automated Optimization
+• Live Monitoring (Simulated)
 """)
 
 
 # ==========================================================
-# AI WEIGHTS (JUSTIFIED)
+# AI WEIGHTS
 # ==========================================================
 
 W_DQI = 0.35
-W_PSQ = 0.40   # Most important
+W_PSQ = 0.40
 W_MSQ = 0.25
 BIAS = 0.05
 
@@ -64,20 +64,20 @@ height = st.sidebar.slider("Height (µm)", 30, 200, 60)
 length = st.sidebar.slider("Length (µm)", 500, 3000, 1500)
 temp = st.sidebar.slider("Temperature (°C)", 20, 60, 37)
 
-
 run_single = st.sidebar.button("▶ Single Run")
 run_batch = st.sidebar.button("📊 Batch (25 Runs)")
 run_ga = st.sidebar.button("🧬 Genetic Optimization")
 run_cfd = st.sidebar.button("🌀 Virtual CFD")
+run_auto = st.sidebar.button("🤖 Auto Optimize")
+run_monitor = st.sidebar.button("📡 Live Monitor (Simulated)")
 
 
 # ==========================================================
-# DQI: FLOW + MECHANICAL QUALITY
+# CORE MODELS
 # ==========================================================
 
 def compute_dqi(flow, w, h, temp, material):
 
-    # Unit conversion
     w *= 1e-6
     h *= 1e-6
 
@@ -94,9 +94,7 @@ def compute_dqi(flow, w, h, temp, material):
     tau = (6 * mu * Q) / (w * h**2)
 
     laminar = min(1, 200 / Re)
-
     shear_damage = math.exp(-0.02 * tau)
-
     temp_factor = max(0.6, 1 - abs(37 - temp) / 40)
 
     mat_factor = {
@@ -113,12 +111,8 @@ def compute_dqi(flow, w, h, temp, material):
         0.2 * mat_factor
     )
 
-    return round(dqi, 3), Re, tau, v, laminar, shear_damage, temp_factor
+    return round(dqi, 3), Re, tau
 
-
-# ==========================================================
-# PSQ: BIOCHEMICAL SEPARATION QUALITY
-# ==========================================================
 
 def compute_psq(dqi, flow, material, w, h, l):
 
@@ -132,7 +126,6 @@ def compute_psq(dqi, flow, material, w, h, l):
     }[material]
 
     residence = max(0.5, 1 - flow / 70)
-
     length_factor = min(1, l / 1800)
 
     psq = (
@@ -143,12 +136,8 @@ def compute_psq(dqi, flow, material, w, h, l):
         0.05 * porosity
     )
 
-    return round(psq, 3), affinity, residence, length_factor, porosity
+    return round(psq, 3), affinity, residence, length_factor
 
-
-# ==========================================================
-# MSQ: MATERIAL PRACTICALITY
-# ==========================================================
 
 def compute_msq(material, temp, flow):
 
@@ -174,12 +163,8 @@ def compute_msq(material, temp, flow):
         0.15 * wet * flow_f
     )
 
-    return round(msq, 3), bio, affinity, stab, fab, wet
+    return round(msq, 3)
 
-
-# ==========================================================
-# FITNESS
-# ==========================================================
 
 def compute_fitness(dqi, psq, msq):
 
@@ -193,106 +178,68 @@ def compute_fitness(dqi, psq, msq):
 
 
 # ==========================================================
-# DQI ANALYSIS
+# ANALYSIS + OPTIMIZATION
 # ==========================================================
 
-def analyze_dqi(dqi, Re, tau, lam, shear, tempf):
+def optimization_engine(dqi, psq, msq, Re, aff, res, lenf, material):
 
-    rep = []
-
-    if dqi > 0.8:
-        rep.append("✅ Excellent flow stability.")
-    elif dqi > 0.65:
-        rep.append("⚠ Moderate flow quality.")
-    else:
-        rep.append("❌ Poor flow conditions.")
+    plan = []
 
     if Re > 200:
-        rep.append("⚠ Turbulence risk → Reduce flow.")
-
-    if tau > 2:
-        rep.append("⚠ High shear → Protein damage risk.")
-
-    if tempf < 0.75:
-        rep.append("⚠ Temperature deviation.")
-
-    return rep
-
-
-# ==========================================================
-# PSQ ANALYSIS
-# ==========================================================
-
-def analyze_psq(psq, aff, res, lenf, por):
-
-    rep = []
-
-    if psq > 0.8:
-        rep.append("✅ High purity separation.")
-    elif psq > 0.65:
-        rep.append("⚠ Moderate purity.")
-    else:
-        rep.append("❌ Low separation efficiency.")
+        plan.append("Reduce flow")
 
     if aff < 0.7:
-        rep.append("⚠ Weak surface binding.")
+        plan.append("Switch to Hydrogel")
 
     if res < 0.7:
-        rep.append("⚠ Flow too fast.")
+        plan.append("Reduce flow")
 
     if lenf < 0.7:
-        rep.append("⚠ Channel too short.")
+        plan.append("Increase length")
 
-    if por < 0.5:
-        rep.append("⚠ Low surface area.")
+    if msq < 0.7:
+        plan.append("Change material")
 
-    return rep
+    if psq > 0.8:
+        plan.append("Near optimal")
+
+    return plan
+
+
+def apply_optimization(flow, length, material, plan):
+
+    f = flow
+    l = length
+    m = material
+
+    for p in plan:
+
+        if "Reduce flow" in p:
+            f *= 0.8
+
+        if "Increase length" in p:
+            l *= 1.2
+
+        if "Switch to Hydrogel" in p:
+            m = "Hydrogel"
+
+        if "Change material" in p:
+            m = "PMMA"
+
+    return f, l, m
 
 
 # ==========================================================
-# MSQ ANALYSIS
+# SENSOR SIMULATION
 # ==========================================================
 
-def analyze_msq(msq, bio, aff, stab, fab, wet):
+def simulate_sensors(flow, temp):
 
-    rep = []
+    f = flow * random.uniform(0.9, 1.1)
+    t = temp + random.uniform(-0.7, 0.7)
+    p = random.uniform(30, 60)
 
-    if msq > 0.8:
-        rep.append("✅ Excellent material choice.")
-    elif msq > 0.65:
-        rep.append("⚠ Acceptable material.")
-    else:
-        rep.append("❌ Poor material selection.")
-
-    if bio < 0.8:
-        rep.append("⚠ Low biocompatibility.")
-
-    if fab < 0.7:
-        rep.append("⚠ Hard to fabricate.")
-
-    if wet < 0.7:
-        rep.append("⚠ Poor wettability.")
-
-    return rep
-
-
-# ==========================================================
-# MATERIAL RANKING
-# ==========================================================
-
-def rank_materials(temp, flow):
-
-    mats = ["PDMS", "PMMA", "Hydrogel", "Resin"]
-
-    res = []
-
-    for m in mats:
-        score, *_ = compute_msq(m, temp, flow)
-        res.append((m, score))
-
-    res.sort(key=lambda x: x[1], reverse=True)
-
-    return res
+    return round(f,2), round(t,2), round(p,2)
 
 
 # ==========================================================
@@ -315,9 +262,7 @@ def virtual_cfd(flow, w, h, l):
     Dh = 2 * w * h / (w + h)
 
     Re = (rho * v * Dh) / mu
-
     dp = (32 * mu * v * l) / (Dh ** 2)
-
     tau = (4 * mu * v) / Dh
 
     return {
@@ -329,115 +274,73 @@ def virtual_cfd(flow, w, h, l):
 
 
 # ==========================================================
-# SINGLE SIMULATION
+# SINGLE RUN
 # ==========================================================
 
 if run_single:
 
     st.subheader("📊 Single Simulation")
 
-    dqi, Re, tau, v, lam, sh, tf = compute_dqi(
-        flow, width, height, temp, material
-    )
+    dqi, Re, _ = compute_dqi(flow, width, height, temp, material)
 
-    psq, aff, res, lenf, por = compute_psq(
+    psq, aff, res, lenf = compute_psq(
         dqi, flow, material, width, height, length
     )
 
-    msq, bio, aff2, stab, fab, wet = compute_msq(
-        material, temp, flow
-    )
+    msq = compute_msq(material, temp, flow)
 
-    fitness = compute_fitness(dqi, psq, msq)
+    fit = compute_fitness(dqi, psq, msq)
 
-
-    # MAIN TABLE
     df = pd.DataFrame(
-        [[1, dqi, psq, msq, fitness]],
-        columns=["Run_ID", "DQI", "PSQ", "MSQ", "Fitness"]
+        [[1, dqi, psq, msq, fit]],
+        columns=["Run","DQI","PSQ","MSQ","Fitness"]
     )
 
     st.table(df)
 
+    st.subheader("🧠 Optimization Plan")
 
-    # ------------------ DQI ------------------
+    plan = optimization_engine(
+        dqi, psq, msq, Re, aff, res, lenf, material
+    )
 
-    st.subheader("🔵 DQI Analysis")
-
-    for x in analyze_dqi(dqi, Re, tau, lam, sh, tf):
-        st.write(x)
-
-
-    # ------------------ PSQ ------------------
-
-    st.subheader("🟢 PSQ Analysis")
-
-    for x in analyze_psq(psq, aff, res, lenf, por):
-        st.write(x)
-
-
-    # ------------------ MSQ ------------------
-
-    st.subheader("🟠 MSQ Analysis")
-
-    for x in analyze_msq(msq, bio, aff2, stab, fab, wet):
-        st.write(x)
-
-
-    # ------------------ MATERIAL ------------------
-
-    st.subheader("🏗️ Material Ranking")
-
-    mats = rank_materials(temp, flow)
-
-    st.success(f"Best Material: {mats[0][0]}")
-
-    st.table(pd.DataFrame(mats, columns=["Material", "MSQ"]))
+    for p in plan:
+        st.write("➡", p)
 
 
 # ==========================================================
-# BATCH SIMULATION
+# BATCH
 # ==========================================================
 
 if run_batch:
 
-    st.subheader("📊 Batch Simulation (25 Runs)")
+    st.subheader("📊 Batch Experiments")
 
-    results = []
+    data = []
 
     for i in range(25):
 
-        f = flow * random.uniform(0.7, 1.3)
-        w = width * random.uniform(0.8, 1.2)
-        h = height * random.uniform(0.8, 1.2)
-        l = length * random.uniform(0.8, 1.2)
+        f = flow * random.uniform(0.7,1.3)
+        w = width * random.uniform(0.8,1.2)
+        h = height * random.uniform(0.8,1.2)
+        l = length * random.uniform(0.8,1.2)
 
-        dqi, _, _, _, _, _, _ = compute_dqi(
-            f, w, h, temp, material
-        )
+        dqi,_,_ = compute_dqi(f,w,h,temp,material)
+        psq,_,_,_ = compute_psq(dqi,f,material,w,h,l)
+        msq = compute_msq(material,temp,f)
+        fit = compute_fitness(dqi,psq,msq)
 
-        psq, *_ = compute_psq(dqi, f, material, w, h, l)
-
-        msq, *_ = compute_msq(material, temp, f)
-
-        fit = compute_fitness(dqi, psq, msq)
-
-        results.append([
-            i + 1, f, w, h, l, dqi, psq, msq, fit
-        ])
+        data.append([i+1,dqi,psq,msq,fit])
 
 
     df = pd.DataFrame(
-        results,
-        columns=[
-            "Run_ID", "Flow", "Width", "Height", "Length",
-            "DQI", "PSQ", "MSQ", "Fitness"
-        ]
+        data,
+        columns=["Run","DQI","PSQ","MSQ","Fitness"]
     )
 
     st.dataframe(df)
 
-    st.line_chart(df.set_index("Run_ID")["Fitness"])
+    st.line_chart(df.set_index("Run")["Fitness"])
 
 
 # ==========================================================
@@ -450,12 +353,11 @@ if run_ga:
 
     pop = []
 
-    for i in range(20):
+    for _ in range(20):
         pop.append([
-            i + 1,
-            random.randint(60, 250),
-            random.randint(40, 180),
-            random.uniform(3, 25)
+            random.randint(60,250),
+            random.randint(40,180),
+            random.uniform(3,25)
         ])
 
     history = []
@@ -464,51 +366,38 @@ if run_ga:
 
         scored = []
 
-        for pid, w, h, f in pop:
+        for w,h,f in pop:
 
-            dqi, _, _, _, _, _, _ = compute_dqi(
-                f, w, h, temp, material
-            )
+            dqi,_,_ = compute_dqi(f,w,h,temp,material)
+            psq,_,_,_ = compute_psq(dqi,f,material,w,h,length)
+            msq = compute_msq(material,temp,f)
 
-            psq, *_ = compute_psq(dqi, f, material, w, h, length)
+            fit = compute_fitness(dqi,psq,msq)
 
-            msq, *_ = compute_msq(material, temp, f)
+            scored.append([w,h,f,fit])
 
-            fit = compute_fitness(dqi, psq, msq)
+        scored.sort(key=lambda x:x[3],reverse=True)
 
-            scored.append([pid, w, h, f, fit])
-
-
-        scored.sort(key=lambda x: x[4], reverse=True)
-
-        best = scored[0]
-
-        history.append([gen + 1, best[0], best[4]])
+        history.append(scored[0][3])
 
         elites = scored[:10]
 
-        new_pop = []
+        pop = []
 
-        for i, (_, w, h, f, _) in enumerate(elites):
+        for w,h,f,_ in elites:
 
-            new_pop.append([
-                i + 1,
-                w + random.randint(-12, 12),
-                h + random.randint(-10, 10),
-                f + random.uniform(-1.5, 1.5)
+            pop.append([
+                w+random.randint(-10,10),
+                h+random.randint(-8,8),
+                f+random.uniform(-1,1)
             ])
 
-        pop = new_pop
 
-
-    df_hist = pd.DataFrame(
-        history,
-        columns=["Generation", "Best_ID", "Best_Fitness"]
+    df = pd.DataFrame(
+        {"Generation":range(1,13),"Fitness":history}
     )
 
-    st.table(df_hist)
-
-    st.line_chart(df_hist.set_index("Generation")["Best_Fitness"])
+    st.line_chart(df.set_index("Generation"))
 
 
 # ==========================================================
@@ -517,8 +406,99 @@ if run_ga:
 
 if run_cfd:
 
-    st.subheader("🌀 Virtual CFD Simulation")
+    st.subheader("🌀 Virtual CFD")
 
-    res = virtual_cfd(flow, width, height, length)
+    st.json(
+        virtual_cfd(flow,width,height,length)
+    )
 
-    st.json(res)
+
+# ==========================================================
+# AUTO OPTIMIZATION
+# ==========================================================
+
+if run_auto:
+
+    st.subheader("🤖 Automated Optimization")
+
+    f = flow
+    l = length
+    m = material
+
+    log = []
+
+    for i in range(6):
+
+        dqi,Re,_ = compute_dqi(f,width,height,temp,m)
+        psq,aff,res,lenf = compute_psq(dqi,f,m,width,height,l)
+        msq = compute_msq(m,temp,f)
+        fit = compute_fitness(dqi,psq,msq)
+
+        log.append([i+1,f,l,m,dqi,psq,msq,fit])
+
+        plan = optimization_engine(
+            dqi,psq,msq,Re,aff,res,lenf,m
+        )
+
+        f,l,m = apply_optimization(f,l,m,plan)
+
+
+    df = pd.DataFrame(
+        log,
+        columns=[
+            "Step","Flow","Length","Material",
+            "DQI","PSQ","MSQ","Fitness"
+        ]
+    )
+
+    st.dataframe(df)
+
+    st.line_chart(df.set_index("Step")["PSQ"])
+
+
+# ==========================================================
+# LIVE MONITOR (SIMULATED)
+# ==========================================================
+
+if run_monitor:
+
+    st.subheader("📡 Live Monitoring (Simulated)")
+
+    placeholder = st.empty()
+
+    log = []
+
+    for i in range(40):
+
+        f,t,p = simulate_sensors(flow,temp)
+
+        dqi,_,_ = compute_dqi(f,width,height,t,material)
+        psq,_,_,_ = compute_psq(dqi,f,material,width,height,length)
+        msq = compute_msq(material,t,f)
+        fit = compute_fitness(dqi,psq,msq)
+
+        log.append([
+            i+1,f,t,p,dqi,psq,msq,fit
+        ])
+
+        df = pd.DataFrame(
+            log,
+            columns=[
+                "Time","Flow","Temp","Pressure",
+                "DQI","PSQ","MSQ","Fitness"
+            ]
+        )
+
+        placeholder.dataframe(df,use_container_width=True)
+
+        if psq < 0.6:
+            st.warning("⚠ Low Separation Efficiency")
+
+        time.sleep(1)
+
+
+    st.download_button(
+        "Download Log",
+        df.to_csv(index=False),
+        "sensor_log.csv"
+    )
