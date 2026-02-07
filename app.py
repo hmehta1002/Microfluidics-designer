@@ -1,6 +1,5 @@
 # =====================================================
-# AI MICROFLUIDIC OPTIMIZER (FULL SYSTEM)
-# DQI + PSQ + MSQ + AI + GA + VIRTUAL CFD
+# AI MICROFLUIDIC OPTIMIZER (FULL + MATERIAL AI)
 # =====================================================
 
 import streamlit as st
@@ -21,8 +20,8 @@ st.set_page_config(
 st.title("🧬 AI Microfluidic Optimization Platform")
 
 st.markdown("""
-Unified platform for microfluidic protein purification:
-CFD Surrogate + Physics + AI + Genetic Optimization
+End-to-end platform for microfluidic protein purification:
+Physics + AI + Optimization + Material Recommendation
 """)
 
 
@@ -48,7 +47,7 @@ st.sidebar.header("⚙️ Controls")
 protein = st.sidebar.text_input("Target Protein", "Albumin")
 
 material = st.sidebar.selectbox(
-    "Material",
+    "Selected Material (Test)",
     ["PDMS", "PMMA", "Hydrogel", "Resin"]
 )
 
@@ -229,6 +228,33 @@ def compute_msq(material,temp,flow):
 
 
 # -----------------------------------------------------
+# MATERIAL RECOMMENDATION ENGINE
+# -----------------------------------------------------
+
+def find_best_material(temp, flow):
+
+    materials = ["PDMS", "PMMA", "Hydrogel", "Resin"]
+
+    scores = {}
+
+    for mat in materials:
+
+        msq = compute_msq(mat, temp, flow)
+        scores[mat] = msq
+
+    ranked = sorted(
+        scores.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    best_mat = ranked[0][0]
+    best_score = ranked[0][1]
+
+    return ranked, best_mat, best_score
+
+
+# -----------------------------------------------------
 # AI FITNESS MODEL
 # -----------------------------------------------------
 
@@ -245,7 +271,7 @@ def ai_fitness(dqi,psq,msq):
 
 
 # -----------------------------------------------------
-# TRAINING DATA GENERATOR
+# TRAINING SYSTEM
 # -----------------------------------------------------
 
 def generate_training_data(n=300):
@@ -278,10 +304,6 @@ def generate_training_data(n=300):
 
     return data
 
-
-# -----------------------------------------------------
-# TRAINING ENGINE
-# -----------------------------------------------------
 
 def train_model(data,lr=0.05,epochs=200):
 
@@ -425,6 +447,11 @@ if run_sim:
 
     fit = ai_fitness(dqi,psq,msq)
 
+    ranked,best_mat,best_score = find_best_material(
+        temperature,
+        flow_rate
+    )
+
     c1,c2,c3,c4 = st.columns(4)
 
     c1.metric("DQI",dqi)
@@ -432,10 +459,27 @@ if run_sim:
     c3.metric("MSQ",msq)
     c4.metric("AI Fitness",round(fit,3))
 
+
     st.info(
         f"Re={Re:.1f} | Shear={tau:.4f} Pa | "
         f"Velocity={v:.5f} m/s"
     )
+
+
+    # Material Recommendation
+    st.subheader("🏗️ Material Recommendation")
+
+    colA,colB = st.columns(2)
+
+    colA.success(f"Best Material: {best_mat}")
+    colA.metric("Best MSQ",best_score)
+
+    rank_df = pd.DataFrame(
+        ranked,
+        columns=["Material","MSQ"]
+    )
+
+    colB.table(rank_df)
 
 
 # -----------------------------------------------------
