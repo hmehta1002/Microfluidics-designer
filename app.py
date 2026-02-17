@@ -1,6 +1,6 @@
 # ==========================================================
-# AI MICROFLUIDIC PURIFICATION SYSTEM
-# Version 7.0 — Formal Research Prototype
+# MICROFLUIDIC PURIFICATION DIGITAL PLATFORM
+# Version 8.0 — Integrated Research Prototype
 # Author: Himani
 # ==========================================================
 
@@ -34,7 +34,6 @@ PROTEIN_DB = pd.DataFrame([
     {"Protein":"EGFP","MW":26.9,"pI":5.6,"Diff":8.7e-11,"Sigma":0.18},
     {"Protein":"mAb","MW":145,"pI":8.5,"Diff":4.2e-11,"Sigma":0.12}
 ])
-
 
 MATERIAL_DB = pd.DataFrame([
     {"Material":"PDMS","Energy":19.8,"Ads":0.8,"Bio":0.85},
@@ -210,25 +209,19 @@ for key, value in defaults.items():
 
 
 # ==========================================================
-# SIDEBAR — SYSTEM CONTROL
+# SIDEBAR
 # ==========================================================
 
 st.sidebar.title("System Control Panel")
 
 protein = st.sidebar.selectbox("Target Protein", PROTEIN_DB.Protein)
-
 material = st.sidebar.selectbox("Channel Material", MATERIAL_DB.Material)
 
 flow = st.sidebar.slider("Flow Rate (µL/min)", 0.1, 200.0, 10.0)
-
 width = st.sidebar.slider("Channel Width (µm)", 10, 1000, 150)
-
 height = st.sidebar.slider("Channel Height (µm)", 10, 500, 50)
-
 length = st.sidebar.slider("Channel Length (µm)", 500, 50000, 5000)
-
 temp = st.sidebar.slider("Operating Temperature (°C)", 4, 80, 37)
-
 
 st.sidebar.markdown("---")
 
@@ -245,9 +238,8 @@ if not st.session_state.run:
     st.title("Microfluidic Purification Digital Platform")
 
     st.info("""
-    This system provides an integrated digital twin,
-    sensor simulation, and analytical environment
-    for microfluidic protein purification research.
+    Integrated digital twin, sensor simulation,
+    and analytical environment for protein purification research.
     """)
 
     st.stop()
@@ -281,16 +273,17 @@ st.caption("Research and Development Prototype")
 # ==========================================================
 
 tabs = st.tabs([
-    "Reference Databases",
-    "Design and Analysis",
-    "Imaging and Sensors",
-    "Stress Evaluation",
-    "Optimization Analysis"
+    "System Database",
+    "Device Design",
+    "Live Experiment",
+    "Robustness Test",
+    "Parameter Optimization",
+    "Results and Report"
 ])
 
 
 # ==========================================================
-# TAB 1 — DATABASES
+# TAB 1 — DATABASE
 # ==========================================================
 
 with tabs[0]:
@@ -357,12 +350,12 @@ with tabs[1]:
 
 
 # ==========================================================
-# TAB 3 — SENSORS
+# TAB 3 — LIVE EXPERIMENT
 # ==========================================================
 
 with tabs[2]:
 
-    st.subheader("Imaging and Sensor Monitoring")
+    st.subheader("Live Experimental Monitoring")
 
     a, b, c = st.columns(3)
 
@@ -432,12 +425,12 @@ with tabs[2]:
 
 
 # ==========================================================
-# TAB 4 — STRESS TEST
+# TAB 4 — ROBUSTNESS TEST
 # ==========================================================
 
 with tabs[3]:
 
-    st.subheader("Flow Stress Evaluation")
+    st.subheader("Flow Robustness Evaluation")
 
     if st.button("Execute Stress Test"):
 
@@ -481,13 +474,12 @@ with tabs[3]:
 
         if len(unsafe) > 0:
             st.dataframe(unsafe, use_container_width=True)
-
         else:
             st.success("All evaluated conditions are stable")
 
 
 # ==========================================================
-# TAB 5 — ANALYTICS
+# TAB 5 — OPTIMIZATION
 # ==========================================================
 
 with tabs[4]:
@@ -496,9 +488,6 @@ with tabs[4]:
 
 
     st.info("""
-    Flow instability and excessive shear
-    reduce separation efficiency.
-
     This surface represents the combined
     performance index across parameters.
     """)
@@ -544,5 +533,78 @@ with tabs[4]:
 
 
 # ==========================================================
+# TAB 6 — RESULTS
+# ==========================================================
 
-st.caption("Version 7.0 — Formal Microfluidic Research Platform")
+with tabs[5]:
+
+    st.subheader("Experimental Results Summary")
+
+
+    if len(st.session_state.sensor_log) == 0:
+
+        st.warning("No experimental data available. Run Live Experiment first.")
+
+    else:
+
+        df = pd.DataFrame(st.session_state.sensor_log)
+
+
+        avg_purity = df["Purity"].mean()
+        max_purity = df["Purity"].max()
+        min_purity = df["Purity"].min()
+
+        avg_visibility = df["Visibility"].mean()
+        avg_depth = df["Depth"].mean()
+
+
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric("Average Purity", f"{avg_purity:.3f}")
+        c2.metric("Maximum Purity", f"{max_purity:.3f}")
+        c3.metric("Minimum Purity", f"{min_purity:.3f}")
+
+
+        st.markdown("---")
+
+
+        st.subheader("System Interpretation")
+
+
+        if avg_purity > 0.8:
+            st.success("System achieved high purification efficiency.")
+
+        elif avg_purity > 0.6:
+            st.warning("System achieved moderate purification efficiency.")
+
+        else:
+            st.error("System performance was suboptimal.")
+
+
+        if engine.Re < 250 and engine.shear < engine.p.Sigma:
+            st.write("Flow conditions were stable during operation.")
+        else:
+            st.write("Flow instability may have affected separation quality.")
+
+
+        st.subheader("Complete Experimental Log")
+
+        st.dataframe(df, use_container_width=True)
+
+
+        st.subheader("Export Results")
+
+
+        csv = df.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            "Download Results (CSV)",
+            csv,
+            "experiment_results.csv",
+            "text/csv"
+        )
+
+
+# ==========================================================
+
+st.caption("Version 8.0 — Integrated Microfluidic Research Platform")
