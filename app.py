@@ -1,6 +1,6 @@
 # ==========================================================
-# AI MICROFLUIDIC PURIFICATION SYSTEM v6.0
-# Complete Digital Twin + Sensor Platform
+# AI MICROFLUIDIC PURIFICATION SYSTEM
+# Version 7.0 — Formal Research Prototype
 # Author: Himani
 # ==========================================================
 
@@ -10,15 +10,16 @@ import numpy as np
 import plotly.graph_objects as go
 import time
 
+
 # ==========================================================
-# PAGE CONFIG
+# PAGE CONFIGURATION
 # ==========================================================
 
 st.set_page_config(
-    page_title="AI Microfluidic Master",
-    page_icon="🧬",
+    page_title="Microfluidic Purification Platform",
     layout="wide"
 )
+
 
 # ==========================================================
 # DATABASES
@@ -34,6 +35,7 @@ PROTEIN_DB = pd.DataFrame([
     {"Protein":"mAb","MW":145,"pI":8.5,"Diff":4.2e-11,"Sigma":0.12}
 ])
 
+
 MATERIAL_DB = pd.DataFrame([
     {"Material":"PDMS","Energy":19.8,"Ads":0.8,"Bio":0.85},
     {"Material":"PMMA","Energy":41,"Ads":0.6,"Bio":0.75},
@@ -42,115 +44,152 @@ MATERIAL_DB = pd.DataFrame([
     {"Material":"SiO2","Energy":72,"Ads":0.02,"Bio":0.90}
 ])
 
+
 # ==========================================================
-# PHYSICS ENGINE
+# MICROFLUIDIC ENGINE
 # ==========================================================
 
 class MicrofluidicEngine:
 
-    def __init__(self, flow,w,h,l,temp,mat,protein):
+    def __init__(self, flow, width, height, length, temp, material, protein):
 
-        self.flow = max(flow,0.1)
-        self.w = max(w,10)
-        self.h = max(h,10)
-        self.l = max(l,500)
+        self.flow = max(flow, 0.1)
+        self.width = max(width, 10)
+        self.height = max(height, 10)
+        self.length = max(length, 500)
 
         self.temp = temp
-        self.mat = mat
+        self.material = material
         self.protein = protein
 
-        self.p = PROTEIN_DB.query("Protein==@protein").iloc[0]
-        self.m = MATERIAL_DB.query("Material==@mat").iloc[0]
+        self.p = PROTEIN_DB.query("Protein == @protein").iloc[0]
+        self.m = MATERIAL_DB.query("Material == @material").iloc[0]
 
         self.solve()
 
 
     def solve(self):
 
-        w = self.w*1e-6
-        h = self.h*1e-6
-        Q = (self.flow*1e-9)/60
+        w = self.width * 1e-6
+        h = self.height * 1e-6
+        Q = (self.flow * 1e-9) / 60
 
         rho = 1000
         mu = 0.001
 
-        self.v = Q/(w*h)
-        self.Dh = (2*w*h)/(w+h)
+        self.velocity = Q / (w * h)
+        self.hydraulic_diameter = (2 * w * h) / (w + h)
 
-        self.Re = rho*self.v*self.Dh/mu
-        self.tau = (6*mu*Q)/(w*h**2)
+        self.Re = rho * self.velocity * self.hydraulic_diameter / mu
+        self.shear = (6 * mu * Q) / (w * h**2)
 
-        lam = 1 if self.Re<250 else max(0,1-self.Re/2300)
-        tq = max(0,1-abs(37-self.temp)/60)
+        laminar_quality = 1 if self.Re < 250 else max(0, 1 - self.Re / 2300)
+        temperature_quality = max(0, 1 - abs(37 - self.temp) / 60)
 
-        self.dqi = 0.6*lam+0.4*tq
+        self.dqi = 0.6 * laminar_quality + 0.4 * temperature_quality
 
-        shear = 1 if self.tau<self.p.Sigma else np.exp(-3*(self.tau-self.p.Sigma))
-        res = (w*h*self.l*1e-6)/Q
-        resq = min(1,res/5)
+        shear_quality = (
+            1 if self.shear < self.p.Sigma
+            else np.exp(-3 * (self.shear - self.p.Sigma))
+        )
 
-        self.psq = 0.3*self.dqi+0.4*shear+0.3*resq
+        residence = (w * h * self.length * 1e-6) / Q
+        residence_quality = min(1, residence / 5)
 
-        bio = self.m.Bio
-        ads = 1-self.m.Ads
+        self.psq = (
+            0.3 * self.dqi +
+            0.4 * shear_quality +
+            0.3 * residence_quality
+        )
 
-        self.msq = 0.7*bio+0.3*ads
+        bio_quality = self.m.Bio
+        adsorption_quality = 1 - self.m.Ads
+
+        self.msq = 0.7 * bio_quality + 0.3 * adsorption_quality
 
         self.fitness = (
-            0.35*self.dqi +
-            0.4*self.psq +
-            0.25*self.msq
+            0.35 * self.dqi +
+            0.4 * self.psq +
+            0.25 * self.msq
         )
 
 
 # ==========================================================
-# HARDWARE PLACEHOLDER LAYER
+# SENSOR SIMULATION (DATA-ONLY)
 # ==========================================================
 
 class CameraSensor:
 
-    def read(self, psq):
+    def __init__(self):
+        self.last_clarity = np.random.uniform(0.6, 0.8)
 
-        zoom = np.random.uniform(2,10)
-        clarity = np.clip(psq + np.random.normal(0,0.05),0,1)
+    def read(self):
 
-        return zoom,clarity
+        zoom = np.random.uniform(3, 8)
+
+        drift = np.random.normal(0, 0.03)
+
+        clarity = self.last_clarity + drift
+        clarity = np.clip(clarity, 0.4, 0.95)
+
+        self.last_clarity = clarity
+
+        return zoom, clarity
 
 
 class LiDARSensor:
 
+    def __init__(self):
+        self.last_depth = None
+
     def read(self, height):
 
-        depth = np.random.uniform(
-            height*0.7,
-            height*1.3
-        )
+        if self.last_depth is None:
+            self.last_depth = height
 
-        noise = np.random.normal(0,1)
+        drift = np.random.normal(0, 2)
 
-        return depth+noise
+        depth = self.last_depth + drift
+
+        depth = np.clip(depth, height * 0.7, height * 1.3)
+
+        self.last_depth = depth
+
+        return depth
 
 
-class ProteinVisionAI:
+class ProteinVisionSensor:
 
-    def analyze(self, clarity, msq):
+    def __init__(self):
+        self.last_visibility = np.random.uniform(0.6, 0.8)
 
-        visibility = np.clip(
-            clarity*msq + np.random.normal(0,0.05),
-            0,1
-        )
+    def read(self):
+
+        drift = np.random.normal(0, 0.03)
+
+        visibility = self.last_visibility + drift
+
+        visibility = np.clip(visibility, 0.4, 0.95)
+
+        self.last_visibility = visibility
 
         return visibility
 
 
-class SeparationAI:
+class SeparationSensor:
 
-    def evaluate(self, visibility, fitness):
+    def __init__(self):
+        self.last_purity = np.random.uniform(0.6, 0.75)
 
-        purity = np.clip(
-            visibility*fitness + np.random.normal(0,0.03),
-            0,1
-        )
+    def read(self):
+
+        drift = np.random.normal(0, 0.04)
+
+        purity = self.last_purity + drift
+
+        purity = np.clip(purity, 0.3, 0.95)
+
+        self.last_purity = purity
 
         return purity
 
@@ -160,75 +199,81 @@ class SeparationAI:
 # ==========================================================
 
 defaults = {
-    "run":False,
-    "live":False,
-    "sim":[],
-    "sensor_log":[]
+    "run": False,
+    "live": False,
+    "sensor_log": []
 }
 
-for k,v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k]=v
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 
 # ==========================================================
-# SIDEBAR
+# SIDEBAR — SYSTEM CONTROL
 # ==========================================================
 
-st.sidebar.title("🧪 Control Panel")
+st.sidebar.title("System Control Panel")
 
-protein = st.sidebar.selectbox("Protein",PROTEIN_DB.Protein)
-material = st.sidebar.selectbox("Material",MATERIAL_DB.Material)
+protein = st.sidebar.selectbox("Target Protein", PROTEIN_DB.Protein)
 
-flow = st.sidebar.slider("Flow (µL/min)",0.1,200.0,10.0)
-width = st.sidebar.slider("Width (µm)",10,1000,150)
-height = st.sidebar.slider("Height (µm)",10,500,50)
-length = st.sidebar.slider("Length (µm)",500,50000,5000)
-temp = st.sidebar.slider("Temperature (°C)",4,80,37)
+material = st.sidebar.selectbox("Channel Material", MATERIAL_DB.Material)
+
+flow = st.sidebar.slider("Flow Rate (µL/min)", 0.1, 200.0, 10.0)
+
+width = st.sidebar.slider("Channel Width (µm)", 10, 1000, 150)
+
+height = st.sidebar.slider("Channel Height (µm)", 10, 500, 50)
+
+length = st.sidebar.slider("Channel Length (µm)", 500, 50000, 5000)
+
+temp = st.sidebar.slider("Operating Temperature (°C)", 4, 80, 37)
+
 
 st.sidebar.markdown("---")
 
-if st.sidebar.button("🚀 Run Simulation",use_container_width=True):
-    st.session_state.run=True
+if st.sidebar.button("Initialize Simulation", use_container_width=True):
+    st.session_state.run = True
 
 
 # ==========================================================
-# START PAGE
+# LANDING PAGE
 # ==========================================================
 
 if not st.session_state.run:
 
-    st.title("🧬 AI Microfluidic Purification Platform")
+    st.title("Microfluidic Purification Digital Platform")
 
     st.info("""
-    Digital Twin + Imaging + AI + Optimization
-    
-    Configure → Simulate → Sense → Analyze → Optimize
+    This system provides an integrated digital twin,
+    sensor simulation, and analytical environment
+    for microfluidic protein purification research.
     """)
 
     st.stop()
 
 
 # ==========================================================
-# ENGINE INIT
+# INITIALIZATION
 # ==========================================================
 
 engine = MicrofluidicEngine(
-    flow,width,height,length,temp,material,protein
+    flow, width, height, length,
+    temp, material, protein
 )
 
 camera = CameraSensor()
 lidar = LiDARSensor()
-vision = ProteinVisionAI()
-sepAI = SeparationAI()
+vision = ProteinVisionSensor()
+separation = SeparationSensor()
 
 
 # ==========================================================
 # HEADER
 # ==========================================================
 
-st.title("🧬 AI Microfluidic Purification Master")
-st.caption("Digital Twin | Sensors | AI Control | Hardware Prototype")
+st.title("Microfluidic Purification System")
+st.caption("Research and Development Prototype")
 
 
 # ==========================================================
@@ -236,96 +281,99 @@ st.caption("Digital Twin | Sensors | AI Control | Hardware Prototype")
 # ==========================================================
 
 tabs = st.tabs([
-    "📋 Databases",
-    "🧪 Design Lab",
-    "📡 Sensors",
-    "⚡ Stress Test",
-    "📊 Analytics"
+    "Reference Databases",
+    "Design and Analysis",
+    "Imaging and Sensors",
+    "Stress Evaluation",
+    "Optimization Analysis"
 ])
 
 
 # ==========================================================
-# TAB 1 — DATABASE
+# TAB 1 — DATABASES
 # ==========================================================
 
 with tabs[0]:
 
-    st.subheader("Protein Library")
-    st.dataframe(PROTEIN_DB,use_container_width=True)
+    st.subheader("Protein Database")
+    st.dataframe(PROTEIN_DB, use_container_width=True)
 
-    st.subheader("Material Library")
-    st.dataframe(MATERIAL_DB,use_container_width=True)
+    st.subheader("Material Database")
+    st.dataframe(MATERIAL_DB, use_container_width=True)
 
 
 # ==========================================================
-# TAB 2 — DESIGN LAB
+# TAB 2 — DESIGN
 # ==========================================================
 
 with tabs[1]:
 
-    c1,c2 = st.columns([1,2])
+    c1, c2 = st.columns([1,2])
+
 
     with c1:
 
-        st.metric("Fitness",f"{engine.fitness:.3f}")
+        st.subheader("System Performance")
+
+        st.metric("Fitness Index", f"{engine.fitness:.3f}")
         st.progress(engine.fitness)
 
-        st.metric("DQI",f"{engine.dqi:.2f}")
-        st.metric("PSQ",f"{engine.psq:.2f}")
-        st.metric("MSQ",f"{engine.msq:.2f}")
+        st.metric("DQI", f"{engine.dqi:.2f}")
+        st.metric("PSQ", f"{engine.psq:.2f}")
+        st.metric("MSQ", f"{engine.msq:.2f}")
 
 
     with c2:
 
-        st.subheader("Flow Physics")
+        st.subheader("Hydrodynamic Status")
 
-        st.write(f"Reynolds: {engine.Re:.1f}")
-        st.write(f"Shear: {engine.tau:.4f} Pa")
+        st.write(f"Reynolds Number: {engine.Re:.1f}")
+        st.write(f"Shear Stress: {engine.shear:.4f} Pa")
 
-        if engine.tau>engine.p.Sigma:
-            st.error("Protein Damage Risk")
 
-        elif engine.Re>2000:
-            st.error("Turbulence")
+        if engine.shear > engine.p.Sigma:
+            st.error("Shear stress exceeds protein tolerance")
 
-        elif engine.Re>250:
-            st.warning("Transition Flow")
+        elif engine.Re > 2000:
+            st.error("Turbulent flow regime")
+
+        elif engine.Re > 250:
+            st.warning("Transitional flow regime")
 
         else:
-            st.success("Laminar Stable")
+            st.success("Stable laminar flow")
 
 
-        st.subheader("Optimization Advisor")
+        st.subheader("Design Recommendations")
 
-        if engine.Re>250:
-            st.write(f"Reduce Flow → {flow*0.7:.1f}")
+        if engine.Re > 250:
+            st.write("Reduce flow rate")
 
-        if engine.tau>engine.p.Sigma:
-            st.write(f"Increase Width → {int(width*1.4)}")
-            st.write(f"Increase Height → {int(height*1.3)}")
+        if engine.shear > engine.p.Sigma:
+            st.write("Increase channel dimensions")
 
-        if engine.psq<0.7:
-            st.write(f"Increase Length → {int(length*1.2)}")
+        if engine.psq < 0.7:
+            st.write("Increase channel length")
 
 
 # ==========================================================
-# TAB 3 — SENSOR DASHBOARD
+# TAB 3 — SENSORS
 # ==========================================================
 
 with tabs[2]:
 
-    st.subheader("📡 Imaging + LiDAR + AI System")
+    st.subheader("Imaging and Sensor Monitoring")
 
-    a,b,c = st.columns(3)
+    a, b, c = st.columns(3)
 
-    if a.button("▶ Start Scan"):
-        st.session_state.live=True
+    if a.button("Start Acquisition"):
+        st.session_state.live = True
 
-    if b.button("⏸ Stop"):
-        st.session_state.live=False
+    if b.button("Stop Acquisition"):
+        st.session_state.live = False
 
-    if c.button("♻ Reset"):
-        st.session_state.sensor_log=[]
+    if c.button("Clear Log"):
+        st.session_state.sensor_log = []
 
 
     cam_box = st.empty()
@@ -335,53 +383,49 @@ with tabs[2]:
 
     if st.session_state.live:
 
-        for i in range(150):
+        for _ in range(200):
 
             if not st.session_state.live:
                 break
 
 
-            zoom,clarity = camera.read(engine.psq)
+            zoom, clarity = camera.read()
 
             depth = lidar.read(height)
 
-            visibility = vision.analyze(
-                clarity,engine.msq
-            )
+            visibility = vision.read()
 
-            purity = sepAI.evaluate(
-                visibility,engine.fitness
-            )
+            purity = separation.read()
 
 
             record = {
-                "Zoom":zoom,
-                "Clarity":clarity,
-                "Depth":depth,
-                "Visibility":visibility,
-                "Purity":purity
+                "Zoom": zoom,
+                "Clarity": clarity,
+                "Depth": depth,
+                "Visibility": visibility,
+                "Purity": purity
             }
 
             st.session_state.sensor_log.append(record)
 
 
-            cam_box.metric("📷 Zoom",f"{zoom:.2f}x")
+            cam_box.metric("Camera Zoom (x)", f"{zoom:.2f}")
             cam_box.progress(clarity)
 
-            lidar_box.metric("📡 Depth (µm)",f"{depth:.1f}")
+            lidar_box.metric("LiDAR Depth (µm)", f"{depth:.1f}")
 
-            ai_box.metric("👁 Visibility",f"{visibility:.2f}")
-            ai_box.metric("🧪 Purity",f"{purity:.2f}")
+            ai_box.metric("Protein Visibility", f"{visibility:.2f}")
+            ai_box.metric("Separation Purity", f"{purity:.2f}")
 
 
-            if purity>0.85:
-                st.success("High Purity Separation")
+            if purity > 0.85:
+                st.success("High purity separation")
 
-            elif purity>0.65:
-                st.warning("Moderate Separation")
+            elif purity > 0.65:
+                st.warning("Moderate separation")
 
             else:
-                st.error("Poor Separation")
+                st.error("Low separation efficiency")
 
 
             time.sleep(0.25)
@@ -393,49 +437,53 @@ with tabs[2]:
 
 with tabs[3]:
 
-    st.subheader("⚡ Flow Stress Scanner")
+    st.subheader("Flow Stress Evaluation")
 
-    if st.button("Run Stress Scan"):
+    if st.button("Execute Stress Test"):
 
-        with st.spinner("Running stress simulation..."):
+        with st.spinner("Processing parameter sweep..."):
 
-            flows = np.linspace(0.5,200,80)
+            flows = np.linspace(0.5, 200, 80)
 
-            rows=[]
+            results = []
+
 
             for f in flows:
 
                 t = MicrofluidicEngine(
-                    f,width,height,length,temp,material,protein
+                    f, width, height, length,
+                    temp, material, protein
                 )
 
-                rows.append([
-                    f,t.tau,t.Re,t.fitness
+                results.append([
+                    f, t.shear, t.Re, t.fitness
                 ])
 
 
             df = pd.DataFrame(
-                rows,
-                columns=["Flow","Shear","Re","Fitness"]
+                results,
+                columns=["Flow","Shear","Reynolds","Fitness"]
             )
 
 
-        st.success("Scan Complete")
+        st.success("Stress evaluation completed")
 
-        st.dataframe(df,use_container_width=True)
+        st.dataframe(df, use_container_width=True)
 
-        danger = df[
-            (df.Shear>engine.p.Sigma)|
-            (df.Re>2000)
+
+        unsafe = df[
+            (df.Shear > engine.p.Sigma) |
+            (df.Reynolds > 2000)
         ]
 
 
-        st.subheader("Unsafe Operating Zone")
+        st.subheader("Unstable Operating Conditions")
 
-        if len(danger)>0:
-            st.dataframe(danger,use_container_width=True)
+        if len(unsafe) > 0:
+            st.dataframe(unsafe, use_container_width=True)
+
         else:
-            st.success("All Conditions Stable")
+            st.success("All evaluated conditions are stable")
 
 
 # ==========================================================
@@ -444,53 +492,57 @@ with tabs[3]:
 
 with tabs[4]:
 
-    st.subheader("Optimization Landscape")
+    st.subheader("Design Optimization Landscape")
+
 
     st.info("""
-    High Re → Reduce Flow  
-    High Shear → Increase Channel Size  
-    Low Purity → Increase Residence Time
+    Flow instability and excessive shear
+    reduce separation efficiency.
+
+    This surface represents the combined
+    performance index across parameters.
     """)
 
 
-    x = np.linspace(50,800,25)
-    y = np.linspace(1,150,25)
+    x = np.linspace(50, 800, 25)
+    y = np.linspace(1, 150, 25)
 
-    z=[]
+    z = []
 
 
     for f in y:
 
-        row=[]
+        row = []
 
         for w in x:
 
-            row.append(
-                MicrofluidicEngine(
-                    f,w,height,length,temp,material,protein
-                ).fitness
-            )
+            val = MicrofluidicEngine(
+                f, w, height, length,
+                temp, material, protein
+            ).fitness
+
+            row.append(val)
 
         z.append(row)
 
 
     fig = go.Figure(
-        data=[go.Surface(z=z,x=x,y=y)]
+        data=[go.Surface(z=z, x=x, y=y)]
     )
 
 
     fig.update_layout(
         scene=dict(
             xaxis_title="Width (µm)",
-            yaxis_title="Flow (µL/min)",
-            zaxis_title="Fitness"
+            yaxis_title="Flow Rate (µL/min)",
+            zaxis_title="Fitness Index"
         )
     )
 
 
-    st.plotly_chart(fig,use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
 
 # ==========================================================
 
-st.caption("v6.0 | AI Microfluidic Digital Twin + Sensor Platform")
+st.caption("Version 7.0 — Formal Microfluidic Research Platform")
