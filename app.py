@@ -1,6 +1,6 @@
 # ==========================================================
 # MICROFLUIDIC PURIFICATION DIGITAL PLATFORM
-# Version 8.0 — Integrated Research Prototype
+# Version 9.0 — Guided Research Prototype
 # Author: Himani
 # ==========================================================
 
@@ -265,7 +265,7 @@ separation = SeparationSensor()
 # ==========================================================
 
 st.title("Microfluidic Purification System")
-st.caption("Research and Development Prototype")
+st.caption("Guided Research and Development Prototype")
 
 
 # ==========================================================
@@ -357,6 +357,14 @@ with tabs[2]:
 
     st.subheader("Live Experimental Monitoring")
 
+    st.info("""
+    Separation Quality Scale:
+
+    High     : > 85% purity (Optimized)
+    Moderate : 65–85% purity (Tunable)
+    Low      : < 65% purity (Unstable)
+    """)
+
     a, b, c = st.columns(3)
 
     if a.button("Start Acquisition"):
@@ -411,14 +419,84 @@ with tabs[2]:
             ai_box.metric("Separation Purity", f"{purity:.2f}")
 
 
+            # =========================
+            # INTERPRETATION SYSTEM
+            # =========================
+
             if purity > 0.85:
-                st.success("High purity separation")
+
+                st.success("Separation Quality: High")
+
+                st.write("Purity above 85%. System operating under optimal conditions.")
+
+                st.write("No parameter adjustment required.")
+
 
             elif purity > 0.65:
-                st.warning("Moderate separation")
+
+                st.warning("Separation Quality: Moderate")
+
+                st.write("Purity between 65% and 85%.")
+
+                reasons = []
+
+                if engine.Re > 250:
+                    reasons.append("flow instability")
+
+                if engine.shear > engine.p.Sigma:
+                    reasons.append("excessive shear stress")
+
+                if engine.psq < 0.7:
+                    reasons.append("short residence time")
+
+                if len(reasons) == 0:
+                    reasons.append("normal experimental variation")
+
+
+                st.write("Possible causes:")
+
+                for r in reasons:
+                    st.write(f"- {r}")
+
+
+                st.write("Recommended actions:")
+
+                if engine.Re > 250:
+                    st.write("- Reduce flow rate")
+
+                if engine.shear > engine.p.Sigma:
+                    st.write("- Increase channel width/height")
+
+                if engine.psq < 0.7:
+                    st.write("- Increase channel length")
+
+                if len(reasons) == 1 and reasons[0] == "normal experimental variation":
+                    st.write("- Repeat experiment for averaging")
+
 
             else:
-                st.error("Low separation efficiency")
+
+                st.error("Separation Quality: Low")
+
+                st.write("Purity below 65%. System is not performing optimally.")
+
+                st.write("Critical issues detected:")
+
+                if engine.Re > 250:
+                    st.write("- Unstable flow regime")
+
+                if engine.shear > engine.p.Sigma:
+                    st.write("- Protein damage risk")
+
+                if engine.psq < 0.6:
+                    st.write("- Insufficient residence time")
+
+
+                st.write("Immediate corrective actions:")
+
+                st.write("- Reduce flow rate significantly")
+                st.write("- Increase channel dimensions")
+                st.write("- Increase channel length")
 
 
             time.sleep(0.25)
@@ -607,4 +685,4 @@ with tabs[5]:
 
 # ==========================================================
 
-st.caption("Version 8.0 — Integrated Microfluidic Research Platform")
+st.caption("Version 9.0 — Guided Microfluidic Research Platform")
